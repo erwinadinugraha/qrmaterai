@@ -41,27 +41,35 @@ public class QrCodeGeneratorController {
         try {
             String combinedString = url + data;
 
-            // Generate the QR code with a higher error correction level
+            // Generate a larger QR code
+            int qrCodeWidth = 500;
+            int qrCodeHeight = 500;
+
             QRCodeWriter qrCodeWriter = new QRCodeWriter();
             Map<EncodeHintType, Object> hints = new HashMap<>();
-            hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.H);
-            BitMatrix bitMatrix = qrCodeWriter.encode(combinedString, BarcodeFormat.QR_CODE, 195, 195, hints);
+            hints.put(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M);
+            BitMatrix bitMatrix = qrCodeWriter.encode(combinedString, BarcodeFormat.QR_CODE, qrCodeWidth, qrCodeHeight, hints);
 
-            // Create a BufferedImage for the QR code
-            BufferedImage qrImage = new BufferedImage(195, 195, BufferedImage.TYPE_INT_ARGB);
-            for (int x = 0; x < 195; x++) {
-                for (int y = 0; y < 195; y++) {
+            BufferedImage qrImage = new BufferedImage(qrCodeWidth, qrCodeHeight, BufferedImage.TYPE_INT_ARGB);
+            for (int x = 0; x < qrCodeWidth; x++) {
+                for (int y = 0; y < qrCodeHeight; y++) {
                     qrImage.setRGB(x, y, bitMatrix.get(x, y) ? Color.RED.getRGB() : 0x00ffffff);
                 }
             }
-//            byte[] imageBytesQr = setDPI(qrImage, 300);
+
+            // Scale the QR code down to the desired size
+            Image scaledImage = qrImage.getScaledInstance(250, 250, Image.SCALE_SMOOTH);
+            BufferedImage scaledQrImage = new BufferedImage(250, 250, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g = scaledQrImage.createGraphics();
+            g.drawImage(scaledImage, 0, 0, null);
+            g.dispose();
 
             // Load the PNG template
             ClassPathResource resource = new ClassPathResource(template);
             BufferedImage templateImage = ImageIO.read(resource.getInputStream());
 
             // Draw the QR code onto the template
-            BufferedImage finalImage = addQRToTemplate(qrImage, templateImage);
+            BufferedImage finalImage = addQRToTemplate(scaledQrImage, templateImage);
 
             // Write the image with the specified DPI
             byte[] imageBytes = writeImageWithDPI(finalImage, 300);
@@ -143,8 +151,26 @@ public class QrCodeGeneratorController {
 
     // draw QR code on template and change DPI
     public BufferedImage addQRToTemplate(BufferedImage qrImage, BufferedImage templateImage) throws IOException {
-        Graphics2D g = templateImage.createGraphics();
-        g.drawImage(qrImage, 15, -10, null);
+        // Define the size of the border
+        int borderSize = 10;
+
+        // Create a new image with the border
+        BufferedImage qrImageWithBorder = new BufferedImage(qrImage.getWidth() + borderSize * 2, qrImage.getHeight() + borderSize * 2, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = qrImageWithBorder.createGraphics();
+        g.setColor(new Color(255, 255, 255, 0)); // Set the color to transparent
+        g.fillRect(0, 0, qrImageWithBorder.getWidth(), qrImageWithBorder.getHeight());
+        g.drawImage(qrImage, borderSize, borderSize, null);
+        g.dispose();
+
+        // Create a new BufferedImage and draw the scaled image onto it
+        Image scaledImage = qrImageWithBorder.getScaledInstance(200, 200, Image.SCALE_SMOOTH);
+        BufferedImage scaledBufferedImage = new BufferedImage(scaledImage.getWidth(null), scaledImage.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+        g = scaledBufferedImage.createGraphics();
+        g.drawImage(scaledImage, 0, 0, null);
+        g.dispose();
+
+        g = templateImage.createGraphics();
+        g.drawImage(scaledBufferedImage, 5, -10, null); // Draw the resized QR code at the top-left corner of the template
         g.dispose();
 
         // write the image with new DPI
